@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "description": "Asistente IA tipo setter para WhatsApp Business (QR) de Jorge Sáenz",
   "type": "module",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "demo": "node scripts/demo.js",
-    "test": "node --test test/*.test.js"
+    "start": "node index.js"
   },
   "engines": {
     "node": ">=22.13"
