@@ -2,7 +2,7 @@ import 'dotenv/config';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.dirname(fileURLToPath(import.meta.url));   // versión plana: todo está en la misma carpeta
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const digits = (s = '') => String(s).replace(/\D/g, '');
 const flag = (k) => (process.env[k] ?? '0') === '1';
@@ -37,7 +37,7 @@ export const cfg = {
   authDir: path.join(dataDir, 'auth'),
   adminKey: process.env.ADMIN_KEY || '',                 // clave para ver el QR en el navegador
   port: Number(process.env.PORT || 3000),
-  playbook: path.join(root, 'playbook', 'skill-asistente-ia-jorge-saenz.md'),
+  playbook: path.join(root, 'skill-asistente-ia-jorge-saenz.md'),
   learned: path.join(dataDir, 'aprendizajes.md'),         // en la carpeta de datos para que sobreviva a los reinicios
   proposals: path.join(dataDir, 'propuestas.md'),
 };
