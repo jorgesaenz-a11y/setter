@@ -7,11 +7,22 @@ const STATUS = { nuevo: 'nuevo', precall: 'en pre-call', confirmado: 'confirmó'
 const OUTCOME = { compro: 'compró', no_compro: 'no compró', pendiente: 'quedó pendiente', no_show: 'no se presentó', incierto: 'no queda claro' };
 const HELP = `Comandos:\n\nok 12 · no 12 · editar 12: texto\n\npendientes · hoy · estado\n\npagó Nombre · no pagó Nombre\n\nia 3001234567 Nombre (agrega un lead) · humano Nombre · ia Nombre (devuelve el lead al agente)\n\npausar · reanudar\n\naprender: regla nueva · aprobar regla 3 · rechazar regla 3`;
 
+const AUTO_KEYS = ['opening', 'reminder', 'reply', 'followup', 'postsale'];
+
 export function createApp({ cfg, db, wa, ai, loadEvents }) {
   const owner = (t) => wa.notifyOwner(t);
   const group = (k, t) => wa.notifyGroup(k, t);
   const when = (iso) => fmtWhen(iso, cfg.tz);
   const paused = () => db.kv('paused') === '1';
+  const isAuto = (k) => { const v = db.kv(`auto:${k}`); return v === null ? !!cfg.auto[k] : v === '1'; };
+  const setAuto = (k, on) => { if (AUTO_KEYS.includes(k)) db.kv(`auto:${k}`, on ? '1' : '0'); };
+  const tagsOf = (l) => {
+    const t = new Set(String(l.tags || '').split(',').map((x) => x.trim()).filter(Boolean));
+    if (l.event_id) t.add('Agenda SaleADS');
+    if (l.ai_tag) t.add('IA');
+    return [...t];
+  };
+  const canAct = (l) => !!l && !l.opted_out && l.agent_enabled !== 0;
   const label = (l) => `${l.name} (${STATUS[l.status] || l.status})`;
 
   function ensureReminders(lead) {
@@ -28,11 +39,11 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     const ap = db.get('SELECT * FROM approvals WHERE id=?', id);
     if (!ap || ap.status !== 'pendiente') return false;
     const lead = db.leadByPhone(ap.phone);
-    if (!lead || lead.opted_out) { db.run("UPDATE approvals SET status='descartado' WHERE id=?", id); return false; }
+    if (!lead || !canAct(lead)) { db.run("UPDATE approvals SET status='descartado' WHERE id=?", id); return false; }
     const text = sanitize(override ?? ap.draft);
     const ok = await wa.sendLead(ap.phone, text);
     if (!ok) { owner(`No pude enviar a ${lead.name} (${ap.phone}). Revisa que el número tenga WhatsApp.`); return false; }
-    db.addMsg(ap.phone, 'out', text);
+    db.addMsg(ap.phone, 'out', text, 'ia');
     db.run("UPDATE approvals SET status='enviado', draft=? WHERE id=?", text, id);
     if (ap.kind === 'opening' && ['nuevo', 'precall'].includes(lead.status)) db.run("UPDATE leads SET status='precall' WHERE phone=?", ap.phone);
     return true;
@@ -43,7 +54,7 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     const text = sanitize(draft);
     const probs = issues(text);
     const { id } = db.run('INSERT INTO approvals(phone,kind,draft) VALUES(?,?,?)', phone, kind, text);
-    if (cfg.auto[AUTO_KEY[kind]] && !probs.length && !paused()) { await sendApproval(id); return id; }
+    if (isAuto(AUTO_KEY[kind]) && !probs.length && !paused()) { await sendApproval(id); return id; }
     owner(`Aprobación ${id} · ${KIND[kind] || kind} · ${lead?.name}\n\nBorrador:\n\n${text}\n\n${probs.length ? `Ojo: ${probs.join(', ')}\n\n` : ''}Responde ok ${id} para enviar, no ${id} para descartar, o editar ${id}: nuevo texto`);
     return id;
   }
@@ -96,7 +107,7 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     const lead = db.leadByPhone(phone);
     if (!lead) return;
     db.addMsg(phone, 'in', text ?? `[${String(type).replace('Message', '')}]`);
-    if (paused()) return;
+    if (paused() || !canAct(lead)) return;
     if (text && /(no (me )?escrib|deja(r)? de escribir|dejen de escribir|^stop$|darme de baja)/i.test(text)) {
       db.run('UPDATE leads SET opted_out=1 WHERE phone=?', phone);
       owner(`${lead.name} pidió no recibir más mensajes. Quedó marcado y no se le escribirá.`);
@@ -130,7 +141,7 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     for (const f of due) {
       db.run('UPDATE followups SET done=1 WHERE id=?', f.id);
       const lead = db.leadByPhone(f.phone);
-      if (!lead || lead.opted_out || lead.status === 'humano' || paused()) continue;
+      if (!canAct(lead) || lead.status === 'humano' || paused()) continue;
       if (f.kind === 'ask_payment') {
         if (['nuevo', 'precall', 'confirmado', 'llamada_hecha'].includes(lead.status)) {
           const n = firstName(lead.name);
@@ -283,5 +294,20 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     }
   }
 
-  return { syncCalendar, handleLeadText, handleOwnerText, processFollowups, handleFathomMeeting, maybeDailyReport, agendaText, propose, sendApproval };
+  // ---------- Ayudas para el panel ----------
+  async function sendManual(phone, text) {
+    const lead = db.leadByPhone(phone);
+    if (!lead) return false;
+    const clean = sanitize(text);
+    const ok = await wa.sendLead(phone, clean);
+    if (ok) db.addMsg(phone, 'out', clean, 'jorge');
+    return ok;
+  }
+  function payByPhone(phone, paid) {
+    const l = db.leadByPhone(phone); if (!l) return false;
+    if (paid) markPaid(l); else markNotPaid(l);
+    return true;
+  }
+
+  return { AUTO_KEYS, KIND, STATUS, isAuto, setAuto, tagsOf, canAct, sendManual, payByPhone, isPaused: paused, syncCalendar, handleLeadText, handleOwnerText, processFollowups, handleFathomMeeting, maybeDailyReport, agendaText, propose, sendApproval };
 }

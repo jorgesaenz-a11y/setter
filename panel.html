@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Setter IA</title>
+<style>
+:root{--bg:#fff;--fg:#0a0a0a;--mu:#666;--ln:#e2e2e2;--sf:#f6f6f6;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#0a0a0a;--fg:#f4f4f4;--mu:#999;--ln:#262626;--sf:#151515}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--ln);flex-wrap:wrap}
+h1{font-size:17px;margin:0}nav{display:flex;gap:4px;padding:8px 16px;border-bottom:1px solid var(--ln);overflow-x:auto}
+nav button{border:0;background:none;color:var(--mu);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit;white-space:nowrap}
+nav button.on{background:var(--fg);color:var(--bg)}main{padding:16px;max-width:1000px;margin:0 auto}
+button,input,select,textarea{font:inherit;color:inherit}.b{border:1px solid var(--fg);background:var(--bg);padding:7px 12px;border-radius:8px;cursor:pointer}
+.b.p{background:var(--fg);color:var(--bg)}input,select,textarea{border:1px solid var(--ln);background:var(--bg);border-radius:8px;padding:8px;width:100%}
+.row{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid var(--ln);border-radius:10px;margin-bottom:8px;cursor:pointer;background:var(--bg)}
+.row:hover{background:var(--sf)}.grow{flex:1;min-width:0}.mu{color:var(--mu);font-size:13px}.tg{display:inline-block;border:1px solid var(--ln);border-radius:99px;padding:1px 8px;font-size:12px;margin:2px 4px 0 0}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dot{width:10px;height:10px;border-radius:50%;background:var(--ln);flex:none}.dot.on{background:var(--fg)}
+.card{border:1px solid var(--ln);border-radius:10px;padding:14px;margin-bottom:10px}.bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+#dr{position:fixed;inset:0 0 0 auto;width:min(480px,100%);background:var(--bg);border-left:1px solid var(--ln);display:none;flex-direction:column;z-index:5}
+#dr.on{display:flex}.msgs{flex:1;overflow:auto;padding:12px;background:var(--sf)}.m{max-width:85%;padding:8px 10px;border-radius:10px;margin:6px 0;white-space:pre-wrap;border:1px solid var(--ln);background:var(--bg)}
+.m.out{margin-left:auto;background:var(--fg);color:var(--bg)}.m small{display:block;opacity:.6;font-size:11px}.pad{padding:12px;border-bottom:1px solid var(--ln)}
+textarea.big{min-height:60vh;font-family:ui-monospace,monospace;font-size:13px}label.sw{display:flex;gap:8px;align-items:center;margin:6px 0}label.sw input{width:auto}
+</style></head><body>
+<header><h1>Setter IA</h1><div id="top" class="mu"></div></header>
+<nav id="nav"></nav><main id="main"></main>
+<aside id="dr"></aside>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(p,b)=>{const r=await fetch('/api/'+p,b===undefined?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});if(r.status===401){document.body.innerHTML='<p style="padding:20px">Sesión vencida. Entra de nuevo con /panel?key=TU_CLAVE</p>';throw 0}return r.json()};
+const TABS=[['c','Contactos'],['a','Agenda'],['p','Aprobaciones'],['i','Instrucciones'],['s','Ajustes']];let tab='c',cur=null,ST={};
+const fmt=iso=>iso?new Date(iso).toLocaleString('es-CO',{timeZone:'America/Bogota',weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'';
+const tags=l=>(l.tags||[]).map(t=>`<span class="tg">${esc(t)}</span>`).join('');
+function nav(){$('#nav').innerHTML=TABS.map(([k,n])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${n}</button>`).join('')}
+async function top(){const s=await api('state');ST=s;$('#top').innerHTML=`${s.connected?'● WhatsApp conectado':'○ WhatsApp sin conectar (<a href="/qr">QR</a>)'} · ${s.paused?'EN PAUSA':'Activo'} · Pendientes: ${s.pending}`}
+async function go(t){tab=t;nav();await top();({c:contacts,a:agenda,p:approvals,i:instr,s:settings})[t]()}
+async function contacts(){const d=await api('leads');ST.stat=d.statuses;$('#main').innerHTML=`<div class="bar"><input id="q" placeholder="Buscar nombre, teléfono o etiqueta" oninput="filt()"><button class="b p" onclick="addLead()">+ Agregar</button></div><div id="list"></div>`;window.ALL=d.leads;filt()}
+function filt(){const q=($('#q').value||'').toLowerCase();$('#list').innerHTML=ALL.filter(l=>(l.name+l.phone+l.tags.join(' ')).toLowerCase().includes(q)).map(l=>`<div class="row" onclick="open_('${l.phone}')"><span class="dot ${l.agent_enabled?'on':''}" title="Agente ${l.agent_enabled?'activo':'apagado'}"></span><div class="grow"><b>${esc(l.name)}</b> <span class="mu">${esc(l.phone)} · ${esc(ST.stat?.[l.status]||l.status)}</span><div class="mu ell">${esc(l.last_text||'Sin mensajes')}</div>${tags(l)}</div><span class="mu">${fmt(l.call_start)}</span></div>`).join('')||'<p class="mu">Sin contactos todavía.</p>'}
+async function addLead(){const phone=prompt('Teléfono con indicativo (ej. 3001234567)');if(!phone)return;const name=prompt('Nombre')||'';const r=await api('lead/create',{phone,name});if(r.error)return alert(r.error);contacts()}
+async function agenda(){const d=await api('agenda');const now=Date.now();$('#main').innerHTML=d.leads.map(l=>`<div class="row" onclick="open_('${l.phone}')"><div class="grow"><b>${esc(l.name)}</b> <span class="mu">${esc(d.statuses[l.status]||l.status)}${l.invest?' · '+esc(l.invest):''}</span></div><span class="${new Date(l.call_start)<now?'mu':''}">${fmt(l.call_start)}</span></div>`).join('')||'<p class="mu">No hay agendas.</p>'}
+async function approvals(){const d=await api('approvals');$('#main').innerHTML=(d.approvals.map(a=>`<div class="card"><b>${esc(a.name||a.phone)}</b> <span class="mu">${esc(d.kinds[a.kind]||a.kind)} · #${a.id}</span><textarea id="t${a.id}" rows="6" style="margin:8px 0">${esc(a.draft)}</textarea><button class="b p" onclick="act(${a.id},'ok')">Enviar</button> <button class="b" onclick="act(${a.id},'no')">Descartar</button></div>`).join(''))||'<p class="mu">No hay nada pendiente.</p>'}
+async function act(id,action){const r=await api('approvals/act',{id,action,text:$('#t'+id)?.value});if(action==='ok'&&!r.ok)alert('No se pudo enviar');go('p')}
+async function instr(){const d=await api('instructions');$('#main').innerHTML=`<p class="mu">Estas son las instrucciones que sigue el agente en cada conversación. Los cambios aplican de inmediato.</p><textarea id="ins" class="big">${esc(d.text)}</textarea><div class="bar"><button class="b p" onclick="saveIns()">Guardar</button><button class="b" onclick="if(confirm('Volver a la versión original?'))api('instructions/restore',{}).then(instr)">Restaurar original</button></div>`}
+async function saveIns(){const r=await api('instructions',{text:$('#ins').value});alert(r.ok?'Guardado':'Error')}
+async function settings(){const s=await api('state');const names={opening:'Mensaje inicial (pre-call)',reminder:'Recordatorios',reply:'Respuestas a leads',followup:'Seguimiento post-llamada',postsale:'Postventa'};
+$('#main').innerHTML=`<div class="card"><label class="sw"><input type="checkbox" ${s.paused?'checked':''} onchange="api('settings',{paused:this.checked}).then(top)"> Pausar todo el agente</label></div>
+<div class="card"><b>Envío automático</b><p class="mu">Apagado = cada mensaje te llega para aprobar. Enciéndelos de a uno cuando confíes en los borradores.</p>${Object.entries(names).map(([k,n])=>`<label class="sw"><input type="checkbox" ${s.auto[k]?'checked':''} onchange="api('settings',{auto:{${k}:this.checked}})"> ${n}</label>`).join('')}</div>
+<div class="card"><b>Conexiones</b><p class="mu">IA: ${esc(s.ai)} · Calendario: ${s.calendar?'conectado':'falta'} · Fathom: ${s.fathom?'conectado':'falta'}</p><p class="mu">Grupos: ${s.groups.map(g=>g.key+(g.ok?' ✓':' ✗')).join(' · ')}</p><div class="bar"><button class="b" onclick="api('groups',{}).then(()=>alert('Listo, revisa los grupos'))">Crear grupos que faltan</button><button class="b" onclick="api('sync',{}).then(()=>alert('Calendario sincronizado'))">Sincronizar calendario</button></div></div>`}
+async function open_(phone){cur=phone;const d=await api('lead/'+phone);draw(d);$('#dr').classList.add('on')}
+function draw(d){const l=d.lead;$('#dr').innerHTML=`<div class="pad"><div style="display:flex;justify-content:space-between"><b>${esc(l.name)}</b><button class="b" onclick="$('#dr').classList.remove('on')">Cerrar</button></div><div class="mu">${esc(l.phone)}${l.call_start?' · '+fmt(l.call_start):''}${l.invest?' · '+esc(l.invest):''}</div>${l.summary?`<div class="mu" style="margin-top:6px">${esc(l.summary)}</div>`:''}
+<label class="sw"><input type="checkbox" ${l.agent_enabled?'checked':''} onchange="upd({agent_enabled:this.checked})"> Agente activo con este contacto</label>
+<div>${tags(l)}</div><div class="bar"><button class="b" onclick="addTag()">+ Etiqueta</button><button class="b" onclick="rmTag()">Quitar etiqueta</button><button class="b" onclick="pay(true)">Pagó</button><button class="b" onclick="pay(false)">No pagó</button></div>
+<select onchange="upd({status:this.value})">${Object.entries(ST.stat||{}).map(([k,v])=>`<option value="${k}" ${k===l.status?'selected':''}>${esc(v)}</option>`).join('')}</select></div>
+<div class="msgs" id="ms">${d.messages.map(m=>`<div class="m ${m.direction==='out'?'out':''}">${esc(m.text)}<small>${m.direction==='out'?(m.by_who==='jorge'?'Tú':'IA'):'Lead'} · ${fmt(m.ts+'Z')}</small></div>`).join('')||'<p class="mu">Sin mensajes.</p>'}</div>
+<div class="pad" style="border:0;border-top:1px solid var(--ln)"><textarea id="mt" rows="3" placeholder="Escribir como tú"></textarea><button class="b p" style="margin-top:6px" onclick="send()">Enviar por WhatsApp</button></div>`;const ms=$('#ms');ms.scrollTop=ms.scrollHeight;window.CUR=l}
+async function upd(b){draw(await api('lead/'+cur,b))}
+async function addTag(){const t=prompt('Nombre de la etiqueta');if(!t)return;upd({tags:[...new Set([...(CUR.tags||[]).filter(x=>x!=='Agenda SaleADS'&&x!=='IA'),t])]})}
+async function rmTag(){const t=prompt('Etiqueta a quitar: '+CUR.tags.join(', '));if(!t)return;upd({tags:CUR.tags.filter(x=>x!==t&&x!=='Agenda SaleADS'&&x!=='IA')})}
+async function pay(p){if(!confirm(p?'Marcar como pagó?':'Marcar como no pagó?'))return;await api(`lead/${cur}/payment`,{paid:p});open_(cur)}
+async function send(){const t=$('#mt').value.trim();if(!t)return;const r=await api(`lead/${cur}/send`,{text:t});if(!r.ok)alert('No se pudo enviar');open_(cur)}
+go('c');setInterval(()=>{if(!$('#dr').classList.contains('on'))top().catch(()=>{})},20000);
+</script></body></html>

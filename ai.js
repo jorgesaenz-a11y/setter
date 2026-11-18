@@ -15,7 +15,7 @@ const PURPOSES = {
 };
 
 const readSafe = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
-export const playbook = (cfg) => `${readSafe(cfg.playbook)}\n\n# Aprendizajes aprobados\n${readSafe(cfg.learned)}`;
+export const playbook = (cfg) => `${readSafe(cfg.playbookData) || readSafe(cfg.playbook)}\n\n# Aprendizajes aprobados\n${readSafe(cfg.learned)}`;
 
 function parseJson(text) {
   const m = text.match(/\{[\s\S]*\}/);

@@ -38,6 +38,7 @@ export const cfg = {
   adminKey: process.env.ADMIN_KEY || '',                 // clave para ver el QR en el navegador
   port: Number(process.env.PORT || 3000),
   playbook: path.join(root, 'skill-asistente-ia-jorge-saenz.md'),
+  playbookData: path.join(dataDir, 'instrucciones.md'),   // copia editable desde el panel
   learned: path.join(dataDir, 'aprendizajes.md'),         // en la carpeta de datos para que sobreviva a los reinicios
   proposals: path.join(dataDir, 'propuestas.md'),
 };

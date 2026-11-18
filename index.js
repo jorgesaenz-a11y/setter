@@ -1,3 +1,4 @@
+import './quiet.js';
 import { cfg } from './config.js';
 import { openDb } from './db.js';
 import { createAi } from './ai.js';
@@ -17,14 +18,15 @@ const db = openDb(cfg.dbPath);
 fs.mkdirSync(cfg.dataDir, { recursive: true });
 for (const f of [cfg.learned, cfg.proposals]) if (!fs.existsSync(f)) fs.writeFileSync(f, '');
 const state = { qr: null, connected: false };
-startWeb({ cfg, state });
 let app;
 const wa = cfg.dryRun
   ? createDryWhatsApp()
   : createWhatsApp({ cfg, db, state, isLead: (p) => !!db.leadByPhone(p), onOwner: (t, r) => app.handleOwnerText(t, r), onLead: (...a) => app.handleLeadText(...a) });
 const ai = createAi(cfg);
+if (!fs.existsSync(cfg.playbookData)) fs.copyFileSync(cfg.playbook, cfg.playbookData);
 app = createApp({ cfg, db, wa, ai, loadEvents: () => loadEvents({ url: cfg.icsUrl, from: new Date(Date.now() - 24 * 3600e3), to: new Date(Date.now() + 21 * 864e5) }) });
 
+startWeb({ cfg, state, db, app, wa });
 await wa.start();
 const every = (ms, name, fn) => {
   const run = async () => { try { await fn(); } catch (e) { console.error(`[${name}]`, e.message); } };

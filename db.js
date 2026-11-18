@@ -21,6 +21,8 @@ export function openDb(file) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, kind TEXT, due_at TEXT, done INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
   `);
+  for (const c of ['tags TEXT', 'agent_enabled INTEGER DEFAULT 1']) { try { raw.exec(`ALTER TABLE leads ADD COLUMN ${c}`); } catch {} }
+  try { raw.exec('ALTER TABLE messages ADD COLUMN by_who TEXT'); } catch {}
   const get = (sql, ...p) => raw.prepare(sql).get(...p);
   const all = (sql, ...p) => raw.prepare(sql).all(...p);
   const run = (sql, ...p) => {
@@ -35,8 +37,8 @@ export function openDb(file) {
       return v;
     },
     leadByPhone: (phone) => get('SELECT * FROM leads WHERE phone=?', phone),
-    addMsg: (phone, direction, text) => run('INSERT INTO messages(phone,direction,text) VALUES(?,?,?)', phone, direction, text),
-    history: (phone, n = 20) => all('SELECT direction,text,ts FROM messages WHERE phone=? ORDER BY id DESC LIMIT ?', phone, n).reverse(),
+    addMsg: (phone, direction, text, by = null) => run('INSERT INTO messages(phone,direction,text,by_who) VALUES(?,?,?,?)', phone, direction, text, by),
+    history: (phone, n = 20) => all('SELECT direction,text,ts,by_who FROM messages WHERE phone=? ORDER BY id DESC LIMIT ?', phone, n).reverse(),
     schedule: (phone, kind, due) => run('INSERT INTO followups(phone,kind,due_at) VALUES(?,?,?)', phone, kind, due.toISOString()),
     clearPending: (phone, kinds) => {
       const q = kinds.map(() => '?').join(',');

@@ -47,8 +47,14 @@ export function createWhatsApp({ cfg, db, state = {}, isLead, onOwner, onLead })
         if (!jid || jid === 'status@broadcast' || jid.endsWith('@newsletter')) continue;
         const isGroup = jid.endsWith('@g.us');
         const from = sender(m.key);
-        const isOwner = from === cfg.ownerPhone || (ownerLid && (jid === ownerLid || m.key.participant === ownerLid));
         const { text, type: mtype } = extract(m);
+        const ids = [jid, m.key.participant].filter(Boolean);
+        if (text && cfg.adminKey && !isGroup && text.trim().toLowerCase() === `registrar ${cfg.adminKey}`.toLowerCase()) {
+          const cur = new Set(JSON.parse(db.kv('owner_ids') || '[]')); cur.add(jid); db.kv('owner_ids', JSON.stringify([...cur]));
+          await sock.sendMessage(jid, { text: 'Listo, te reconozco como el dueño. Escribe ayuda para ver los comandos.' }); continue;
+        }
+        const known = JSON.parse(db.kv('owner_ids') || '[]');
+        const isOwner = from === cfg.ownerPhone || ids.some((i) => i === ownerLid || known.includes(i));
         if (isOwner) { if (text) await onOwner(text, (t) => sock.sendMessage(jid, { text: t })); continue; }
         if (isGroup) continue;                       // en grupos solo atiende tus comandos
         if (!from) {
@@ -63,8 +69,10 @@ export function createWhatsApp({ cfg, db, state = {}, isLead, onOwner, onLead })
   async function ensureGroups() {
     for (const [key, name] of Object.entries(GROUPS)) {
       if (db.kv(`group:${key}`)) continue;
-      const g = await sock.groupCreate(name, [ownerJid]);
+      let g;
+      try { g = await sock.groupCreate(name, [ownerJid]); } catch (e) { console.error(`No pude crear el grupo ${name}:`, e.message); await sleep(20000); continue; }
       db.kv(`group:${key}`, g.id);
+      await sleep(8000);
       await sock.sendMessage(g.id, { text: `${name}: aquí te aviso ${key === 'reportes' ? 'del reporte diario y de quién pide hablar con una persona' : key === 'confirmaciones' ? 'de nuevas agendas, confirmaciones, cambios y cancelaciones' : 'de cada llamada que terminó para que confirmes si pagó'}.` });
     }
   }
@@ -109,6 +117,7 @@ export function createWhatsApp({ cfg, db, state = {}, isLead, onOwner, onLead })
 
   return {
     start: connect,
+    ensureGroups: () => ensureGroups(),
     sendLead(phone, text) {
       const p = chain.then(() => doSend(phone, text)).catch((e) => { console.error('Error enviando:', e.message); return false; });
       chain = p.then(() => {});
