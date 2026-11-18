@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normPhone, sanitize, issues, parseApproval, investPhrase, openingMessage, firstName } from '../src/text.js';
+import { normPhone, sanitize, issues, parseApproval, investPhrase, openingMessage, firstName } from './text.js';
 
 test('normaliza teléfonos', () => {
   assert.equal(normPhone('300 3185939'), '573003185939');

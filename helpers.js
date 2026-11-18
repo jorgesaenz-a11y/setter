@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb } from '../src/db.js';
-import { createApp } from '../src/app.js';
-import { loadEvents } from '../src/calendar.js';
+import { openDb } from './db.js';
+import { createApp } from './app.js';
+import { loadEvents } from './calendar.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const ics = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
