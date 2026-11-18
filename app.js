@@ -103,12 +103,21 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
   }
 
   // ---------- Mensajes de leads ----------
+  // Cada mensaje nuevo reinicia la espera: si el lead sigue escribiendo, la IA
+  // no responde hasta que pasan replyWaitMs sin mensajes, para leer todo el contexto junto.
+  const pendingReplies = new Map();
+  function clearPendingReply(phone) {
+    const t = pendingReplies.get(phone);
+    if (t) { clearTimeout(t); pendingReplies.delete(phone); }
+  }
+
   async function handleLeadText(phone, text, type) {
     const lead = db.leadByPhone(phone);
     if (!lead) return;
     db.addMsg(phone, 'in', text ?? `[${String(type).replace('Message', '')}]`);
     if (paused() || !canAct(lead)) return;
     if (text && /(no (me )?escrib|deja(r)? de escribir|dejen de escribir|^stop$|darme de baja)/i.test(text)) {
+      clearPendingReply(phone);
       db.run('UPDATE leads SET opted_out=1 WHERE phone=?', phone);
       owner(`${lead.name} pidió no recibir más mensajes. Quedó marcado y no se le escribirá.`);
       return;
@@ -118,6 +127,18 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
       owner(`${lead.name} envió un mensaje de tipo ${String(type).replace('Message', '')}. Revísalo tú; el agente aún no procesa audio, imágenes ni video.`);
       return propose({ phone, kind: 'reply', draft: 'Gracias por tu mensaje, lo reviso y te respondo enseguida.' });
     }
+    const wait = cfg.replyWaitMs || 0;
+    clearPendingReply(phone);
+    if (!wait) return draftReply(phone);
+    pendingReplies.set(phone, setTimeout(() => {
+      pendingReplies.delete(phone);
+      draftReply(phone).catch((e) => owner(`Error con la IA al responder a ${lead.name}: ${e.message}`));
+    }, wait));
+  }
+
+  async function draftReply(phone) {
+    const lead = db.leadByPhone(phone);
+    if (!lead || paused() || !canAct(lead) || lead.status === 'humano') return;
     let out;
     try {
       out = await ai.draft({ lead, history: db.history(phone), purpose: 'reply', when: lead.call_start ? when(lead.call_start) : null });
@@ -128,7 +149,8 @@ export function createApp({ cfg, db, wa, ai, loadEvents }) {
     if (intent === 'compra') owner(`${lead.name} muestra intención de compra. Revisa la conversación.`);
     if (intent === 'pide_humano' || out.needs_human) {
       if (intent === 'pide_humano') db.run("UPDATE leads SET status='humano' WHERE phone=?", phone);
-      const msg = `${lead.name} necesita a una persona (${out.reason || intent}).\n\nÚltimo mensaje:\n\n${text}`;
+      const lastIn = [...db.history(phone)].reverse().find((m) => m.direction === 'in');
+      const msg = `${lead.name} necesita a una persona (${out.reason || intent}).\n\nÚltimo mensaje:\n\n${lastIn?.text ?? ''}`;
       owner(msg); group('reportes', msg);
       if (!out.reply) return;
     }

@@ -125,3 +125,25 @@ test('SKIP_OPENINGS_BEFORE evita duplicar aperturas a quienes ya contactaste', a
   assert.equal(db.all("SELECT * FROM approvals WHERE kind='opening'").length, 1);
   assert.equal(db.leadByPhone('573003185939').status, 'precall');
 });
+
+test('con REPLY_WAIT_MS espera y junta los mensajes seguidos antes de responder', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { app, db, cfg } = makeApp({ icsText: ICS });
+  cfg.replyWaitMs = 30000;
+  await app.syncCalendar();
+  const phone = '573003185939';
+
+  await app.handleLeadText(phone, 'Tengo una tienda de ropa', 'conversation');
+  t.mock.timers.tick(20000);
+  await app.handleLeadText(phone, 'y vendo por Instagram', 'conversation');
+  assert.equal(db.all("SELECT * FROM approvals WHERE kind='reply'").length, 0, 'no debe responder mientras el lead sigue escribiendo');
+
+  t.mock.timers.tick(29999);
+  assert.equal(db.all("SELECT * FROM approvals WHERE kind='reply'").length, 0, 'todavía no pasaron 30s desde el último mensaje');
+
+  t.mock.timers.tick(1);
+  await Promise.resolve(); await Promise.resolve();
+  const ap = db.all("SELECT * FROM approvals WHERE kind='reply'");
+  assert.equal(ap.length, 1, 'responde una sola vez tras el silencio');
+  assert.equal(db.all('SELECT * FROM messages WHERE phone=? AND direction=?', phone, 'in').length, 2, 'ambos mensajes quedaron guardados');
+});

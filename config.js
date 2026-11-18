@@ -20,6 +20,8 @@ export const cfg = {
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
   model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
   fathomKey: process.env.FATHOM_API_KEY || '',
+  // Cuánto espera el agente tras el último mensaje del lead antes de responder, para juntar varios mensajes seguidos. 0 = responde de inmediato.
+  replyWaitMs: Number(process.env.REPLY_WAIT_SECONDS ?? 30) * 1000,
   // Agendas anteriores a esta fecha (AAAA-MM-DD) no reciben borrador de apertura: úsalo para los leads que ya contactaste a mano.
   skipOpeningsBefore: process.env.SKIP_OPENINGS_BEFORE ? new Date(`${process.env.SKIP_OPENINGS_BEFORE}T00:00:00-05:00`) : null,
   dryRun: flag('DRY_RUN'),
