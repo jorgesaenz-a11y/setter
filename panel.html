@@ -30,8 +30,8 @@ const TABS=[['c','Contactos'],['a','Agenda'],['p','Aprobaciones'],['i','Instrucc
 const fmt=iso=>iso?new Date(iso).toLocaleString('es-CO',{timeZone:'America/Bogota',weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}):'';
 const tags=l=>(l.tags||[]).map(t=>`<span class="tg">${esc(t)}</span>`).join('');
 function nav(){$('#nav').innerHTML=TABS.map(([k,n])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${n}</button>`).join('')}
-async function top(){const s=await api('state');ST=s;$('#top').innerHTML=`${s.connected?'● WhatsApp conectado':'○ WhatsApp sin conectar (<a href="/qr">QR</a>)'} · ${s.paused?'EN PAUSA':'Activo'} · Pendientes: ${s.pending}`}
-async function go(t){tab=t;nav();await top();({c:contacts,a:agenda,p:approvals,i:instr,s:settings})[t]()}
+async function topbar(){const s=await api('state');ST=s;$('#top').innerHTML=`${s.connected?'● WhatsApp conectado':'○ WhatsApp sin conectar (<a href="/qr">QR</a>)'} · ${s.paused?'EN PAUSA':'Activo'} · Pendientes: ${s.pending}`}
+async function go(t){tab=t;nav();await topbar();({c:contacts,a:agenda,p:approvals,i:instr,s:settings})[t]()}
 async function contacts(){const d=await api('leads');ST.stat=d.statuses;$('#main').innerHTML=`<div class="bar"><input id="q" placeholder="Buscar nombre, teléfono o etiqueta" oninput="filt()"><button class="b p" onclick="addLead()">+ Agregar</button></div><div id="list"></div>`;window.ALL=d.leads;filt()}
 function filt(){const q=($('#q').value||'').toLowerCase();$('#list').innerHTML=ALL.filter(l=>(l.name+l.phone+l.tags.join(' ')).toLowerCase().includes(q)).map(l=>`<div class="row" onclick="open_('${l.phone}')"><span class="dot ${l.agent_enabled?'on':''}" title="Agente ${l.agent_enabled?'activo':'apagado'}"></span><div class="grow"><b>${esc(l.name)}</b> <span class="mu">${esc(l.phone)} · ${esc(ST.stat?.[l.status]||l.status)}</span><div class="mu ell">${esc(l.last_text||'Sin mensajes')}</div>${tags(l)}</div><span class="mu">${fmt(l.call_start)}</span></div>`).join('')||'<p class="mu">Sin contactos todavía.</p>'}
 async function addLead(){const phone=prompt('Teléfono con indicativo (ej. 3001234567)');if(!phone)return;const name=prompt('Nombre')||'';const r=await api('lead/create',{phone,name});if(r.error)return alert(r.error);contacts()}
@@ -41,7 +41,7 @@ async function act(id,action){const r=await api('approvals/act',{id,action,text:
 async function instr(){const d=await api('instructions');$('#main').innerHTML=`<p class="mu">Estas son las instrucciones que sigue el agente en cada conversación. Los cambios aplican de inmediato.</p><textarea id="ins" class="big">${esc(d.text)}</textarea><div class="bar"><button class="b p" onclick="saveIns()">Guardar</button><button class="b" onclick="if(confirm('Volver a la versión original?'))api('instructions/restore',{}).then(instr)">Restaurar original</button></div>`}
 async function saveIns(){const r=await api('instructions',{text:$('#ins').value});alert(r.ok?'Guardado':'Error')}
 async function settings(){const s=await api('state');const names={opening:'Mensaje inicial (pre-call)',reminder:'Recordatorios',reply:'Respuestas a leads',followup:'Seguimiento post-llamada',postsale:'Postventa'};
-$('#main').innerHTML=`<div class="card"><label class="sw"><input type="checkbox" ${s.paused?'checked':''} onchange="api('settings',{paused:this.checked}).then(top)"> Pausar todo el agente</label></div>
+$('#main').innerHTML=`<div class="card"><label class="sw"><input type="checkbox" ${s.paused?'checked':''} onchange="api('settings',{paused:this.checked}).then(topbar)"> Pausar todo el agente</label></div>
 <div class="card"><b>Envío automático</b><p class="mu">Apagado = cada mensaje te llega para aprobar. Enciéndelos de a uno cuando confíes en los borradores.</p>${Object.entries(names).map(([k,n])=>`<label class="sw"><input type="checkbox" ${s.auto[k]?'checked':''} onchange="api('settings',{auto:{${k}:this.checked}})"> ${n}</label>`).join('')}</div>
 <div class="card"><b>Conexiones</b><p class="mu">IA: ${esc(s.ai)} · Calendario: ${s.calendar?'conectado':'falta'} · Fathom: ${s.fathom?'conectado':'falta'}</p><p class="mu">Grupos: ${s.groups.map(g=>g.key+(g.ok?' ✓':' ✗')).join(' · ')}</p><div class="bar"><button class="b" onclick="api('groups',{}).then(()=>alert('Listo, revisa los grupos'))">Crear grupos que faltan</button><button class="b" onclick="api('sync',{}).then(()=>alert('Calendario sincronizado'))">Sincronizar calendario</button></div></div>`}
 async function open_(phone){cur=phone;const d=await api('lead/'+phone);draw(d);$('#dr').classList.add('on')}
@@ -56,5 +56,5 @@ async function addTag(){const t=prompt('Nombre de la etiqueta');if(!t)return;upd
 async function rmTag(){const t=prompt('Etiqueta a quitar: '+CUR.tags.join(', '));if(!t)return;upd({tags:CUR.tags.filter(x=>x!==t&&x!=='Agenda SaleADS'&&x!=='IA')})}
 async function pay(p){if(!confirm(p?'Marcar como pagó?':'Marcar como no pagó?'))return;await api(`lead/${cur}/payment`,{paid:p});open_(cur)}
 async function send(){const t=$('#mt').value.trim();if(!t)return;const r=await api(`lead/${cur}/send`,{text:t});if(!r.ok)alert('No se pudo enviar');open_(cur)}
-go('c');setInterval(()=>{if(!$('#dr').classList.contains('on'))top().catch(()=>{})},20000);
+go('c');setInterval(()=>{if(!$('#dr').classList.contains('on'))topbar().catch(()=>{})},20000);
 </script></body></html>
